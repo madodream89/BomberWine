@@ -1,0 +1,107 @@
+name: All builds (vanilla, staging, staging-tkg, proton)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  wine:
+    name: Vanilla + Staging + Staging-TkG
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download bootstraps
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          repo: Kron4ek/Wine-Builds
+          workflow: bootstraps.yml
+          workflow_conclusion: success
+          path: /opt
+
+      - name: Build Wine
+        run: |
+          set -e
+          sudo apt update
+          sudo apt install -y debootstrap perl git wget xz-utils bubblewrap autoconf
+          sudo tar -C /opt -xpf /opt/Bootstraps/bootstraps.tar.xz
+          chmod +x build_wine.sh
+
+          export WINE_VERSION="$(wget -q -O - "https://raw.githubusercontent.com/Kron4ek/wine-tkg/master/VERSION" | tail -c +14)"
+          export EXPERIMENTAL_WOW64="true"
+          echo "Wine version: ${WINE_VERSION}"
+
+          # Approximate progress monitor (compiled objects vs. source files)
+          progress_monitor() {
+            while true; do
+              if [ -d wine ]; then
+                total=$(find wine/dlls wine/programs wine/libs -name '*.c' 2>/dev/null | wc -l)
+                built=$(find "${HOME}"/build_wine -name '*.o' 2>/dev/null | wc -l)
+                if [ "${total}" -gt 0 ]; then
+                  pct=$(( built * 100 / total ))
+                  [ "${pct}" -gt 99 ] && pct=99
+                  echo "[progreso aprox.] ${pct}% (${built} objetos de ${total} fuentes .c)"
+                fi
+              fi
+              sleep 60
+            done
+          }
+          progress_monitor &
+          MONITOR_PID=$!
+          trap 'kill ${MONITOR_PID} 2>/dev/null || true' EXIT
+
+          for branch in vanilla staging staging-tkg; do
+            echo "::group::Building ${branch}"
+            start=$(date +%s)
+            WINE_BRANCH="${branch}" ./build_wine.sh
+            end=$(date +%s)
+            echo "::endgroup::"
+            echo "### ${branch}: $(( (end - start) / 60 )) min $(( (end - start) % 60 )) s" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+          sha256sum ./*.tar.xz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wine-vanilla-staging-tkg
+          path: ./*.tar.xz
+          if-no-files-found: error
+
+  proton:
+    name: Proton
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download bootstraps
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          repo: Kron4ek/Wine-Builds
+          workflow: bootstraps.yml
+          workflow_conclusion: success
+          path: /opt
+
+      - name: Build Proton
+        run: |
+          set -e
+          sudo apt update
+          sudo apt install -y debootstrap perl git wget xz-utils bubblewrap autoconf
+          sudo tar -C /opt -xpf /opt/Bootstraps/bootstraps.tar.xz
+          chmod +x build_wine.sh
+
+          export EXPERIMENTAL_WOW64="true"
+          export WINE_BRANCH=proton
+
+          start=$(date +%s)
+          ./build_wine.sh
+          end=$(date +%s)
+          echo "### proton: $(( (end - start) / 60 )) min $(( (end - start) % 60 )) s" >> "$GITHUB_STEP_SUMMARY"
+
+          sha256sum ./*.tar.xz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wine-proton
+          path: ./*.tar.xz
+          if-no-files-found: error

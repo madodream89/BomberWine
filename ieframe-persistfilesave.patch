@@ -1,0 +1,24 @@
+diff --git a/dlls/ieframe/intshcut.c b/dlls/ieframe/intshcut.c
+index fd28d8d..e3a2c53 100644
+--- a/dlls/ieframe/intshcut.c
++++ b/dlls/ieframe/intshcut.c
+@@ -617,15 +617,18 @@ static HRESULT WINAPI PersistFile_Save(IPersistFile *pFile, LPCOLESTR pszFileNam
+                     IPropertyStorage_Release(pPropStgRead);
+                     PropVariantClear(&pvread[0]);
+                     PropVariantClear(&pvread[1]);
++                    hr = S_OK;
+                 }
+                 else
+                 {
+                     TRACE("Unable to read properties.\n");
++                    hr = S_OK;
+                 }
+             }
+             else
+             {
+-               TRACE("Unable to get the IPropertyStorage.\n");
++               TRACE("Unable to get the IPropertyStorage (hr=0x%lx); skipping icon properties.\n", hr);
++               hr = S_OK;
+             }
+ 
+             CloseHandle(file);

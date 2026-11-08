@@ -76,6 +76,30 @@ Configure options: `--without-oss --disable-winemenubuilder --disable-tests`
 
 ---
 
+### Additional patches
+
+This fork adds `ieframe-persistfilesave.patch`, which is applied by `build_wine.sh` to
+every branch (vanilla, staging, staging-tkg, proton).
+
+It fixes a bug in `dlls/ieframe/intshcut.c`: `IPersistFile::Save()` returned an error when it
+failed to reopen the internal `IPropertySetStorage` to read the optional `ICONFILE`/`ICONINDEX`
+properties, even though the `.url` file had already been written successfully. WiX-based
+installers (`WixCreateInternetShortcuts`) treated that error as a fatal failure, aborted with
+`1603` and rolled back the whole installation. This affects, for example, KONAMI e-AMUSEMENT /
+KONASTE MSIs (`BomberGirl_Installer.msi`, `NOSTALGIA_installer.msi`, `GITADORA_installer.msi`,
+`konast_installer_1.1.0.msi`).
+
+With the patch, failures while reading the optional icon properties are ignored and `Save()`
+returns `S_OK`, so the shortcut is created without icon data (valid and matching Windows
+behavior). Real write failures still return an error.
+
+If you don't want this patch, remove the `patch` call from `build_wine.sh` or delete
+`ieframe-persistfilesave.patch` and the block that applies it.
+
+Upstream status: the fix is not part of Wine yet.
+
+---
+
 ## Compilation / Build environment
 
 I use `create_ubuntu_bootstraps.sh` and `build_wine.sh` to compile my Wine builds, you can use these scripts to compile your own Wine builds. The first script creates two Ubuntu bootstraps (32-bit and 64-bit) and the second script compiles Wine builds inside the created bootstraps by using `bubblewrap`.

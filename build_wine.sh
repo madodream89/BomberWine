@@ -296,6 +296,25 @@ if [ ! -d wine ]; then
 	exit 1
 fi
 
+# Apply the ieframe PersistFile_Save() fix.
+# Without it, .url shortcuts with icon properties make IPersistFile::Save()
+# return an error even though the file was written, which breaks WiX-based
+# installers (WixCreateInternetShortcuts -> 1603 -> full rollback).
+echo
+echo "Applying the ieframe .url shortcut fix"
+echo
+
+if patch -d wine -Np1 --forward --dry-run < "${scriptdir}"/ieframe-persistfilesave.patch >/dev/null 2>&1; then
+	patch -d wine -Np1 < "${scriptdir}"/ieframe-persistfilesave.patch || exit 1
+elif grep -q "skipping icon properties" wine/dlls/ieframe/intshcut.c 2>/dev/null; then
+	echo "The ieframe fix is already applied, skipping."
+else
+	echo
+	echo "Failed to apply ieframe-persistfilesave.patch!"
+	echo "The Wine source code is probably too different from the expected one."
+	exit 1
+fi
+
 cd wine || exit 1
 dlls/winevulkan/make_vulkan
 tools/make_requests
